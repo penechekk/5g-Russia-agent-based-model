@@ -1,0 +1,291 @@
+import numpy as np
+import pandas as pd
+import random
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
+from simulation import Simulation
+
+def run_scenario(
+        name,
+        monte_carlo_runs=30,
+        visualize=False,
+        **kwargs):
+
+    print(f"\n===== Сценарий: {name} =====")
+
+    all_results = []
+    data = []
+
+    for seed in range(monte_carlo_runs):
+
+        print(f"Simulation {seed + 1}/{monte_carlo_runs}")
+
+        np.random.seed(seed)
+        random.seed(seed)
+
+        sim = Simulation(
+            num_subscribers=1000,
+            total_years=20,
+            visualize=visualize,
+            **kwargs
+        )
+
+        sim.run_full_simulation()
+        operators_5g = [i for i, op in enumerate(sim.operators) if op.has_5g_license]
+
+        for year_idx, year in enumerate(sim.history["Годы"]):
+            #ARPU
+            arpu_values = sim.history["ARPU 5G"][year_idx]
+            active_arpu = [arpu_values[i] for i in operators_5g]
+            mean_arpu = (np.mean(active_arpu) if active_arpu else 0)
+
+            #Coverage
+            coverage_values = sim.history["Покрытие 5G"][year_idx]
+            active_cov = [coverage_values[i] for i in operators_5g]
+            mean_coverage = (np.mean(active_cov) if active_cov else 0)
+
+            #Prices
+            price_values = sim.history["Цены"][year_idx]
+            active_prices = [price for i in operators_5g for price in price_values[i]]
+            mean_price = (np.mean(active_prices) if active_prices else 0)
+
+            #Revenue
+            revenue_values = list(sim.history["Годовая выручка 5G"][year_idx])
+            total_revenue = np.sum([revenue_values[i] for i in operators_5g])
+
+            cum_revenue = list(sim.history["Выручка 5G"][year_idx])
+            tot_cum_revenue = np.sum([cum_revenue[i] for i in operators_5g])
+
+            #Costs
+            cost_values = list(sim.history["Годовые издержки 5G"][year_idx])
+            total_costs = np.sum([cost_values[i] for i in operators_5g])
+
+            cum_costs = list(sim.history["Издержки 5G"][year_idx])
+            total_cum_costs = np.sum([cum_costs[i] for i in operators_5g])
+
+            #Profit
+            profit_values = list(sim.history["Годовая прибыль 5G"][year_idx])
+            total_profit = np.sum([profit_values[i] for i in operators_5g])
+
+            cum_profit = list(sim.history["Прибыль 5G"][year_idx])
+            total_cum_profit = np.sum([cum_profit[i] for i in operators_5g])
+
+            invest_profit = list(sim.history['Инвестиционная прибыль'][year_idx])
+            tot_invest_profit = np.sum([invest_profit[i] for i in operators_5g])
+
+            #CAPEX
+            capex_values = list(sim.history["Годовые капитальные издержки 5G"][year_idx])
+            total_capex = np.sum([capex_values[i] for i in operators_5g])
+
+            cum_capex = list(sim.history["CAPEX 5G"][year_idx])
+            total_cum_capex = np.sum([cum_capex[i] for i in operators_5g])
+
+            #Fines
+            fine_values = sim.history["Штрафы"][year_idx]
+            total_fines = np.sum([fine_values[i] for i in operators_5g])
+
+            # HHI
+            hhi = sim.history["HHI"][year_idx]
+
+            # Продажи
+            q_5g = list(sim.history['Годовые продажи 5G'][year_idx])
+            mean_q_5g = np.mean([q_5g[i] for i in operators_5g])
+
+            tot_sales = list(sim.history['Продано тарифов 5G'][year_idx])
+            mean_tot_sales = np.mean([tot_sales[i] for i in operators_5g])
+
+            #Оставшийся инвестиционный бюджет
+            sum_invest = list(sim.history['Суммарные инвестиции 5G'][year_idx])
+            tot_invest = np.sum([sum_invest[i] for i in operators_5g])
+
+            result = {
+                "Сценарий": name,
+                "Simulation": seed + 1,
+                "Год": year,
+
+                "HHI": float(hhi),
+
+                "ARPU 5G": float(mean_arpu),
+
+                "Покрытие 5G": float(mean_coverage),
+
+                "Цена 5G": float(mean_price),
+
+                "Годовая выручка 5G": float(total_revenue),
+                "Накопленная выручка 5G": float(tot_cum_revenue),
+
+                "Годовые издержки 5G": float(total_costs),
+                "Накопленные издержки 5G": float(total_cum_costs),
+
+                "Годовая прибыль 5G": float(total_profit),
+                "Накопленная прибыль 5G": float(total_cum_profit),
+                "Инвестиционная прибыль": float(tot_invest_profit),
+
+                "Годовые CAPEX 5G": float(total_capex),
+                "Накопленные капитальные затраты": float(total_cum_capex),
+
+                "Штрафы": float(total_fines),
+
+                "Годовые продажи тарифов 5G": float(mean_q_5g),
+                "Общие продажи": float(mean_tot_sales),
+
+                "Суммарные инвестиции": float(tot_invest)
+            }
+
+            all_results.append(result)
+
+    df = pd.DataFrame(all_results)
+
+    return df
+
+def run_experiments():
+    scenarios = [
+        ("Baseline", {
+            "equipment_scenario": "none",
+            "dishonest_operators": "none",
+            "infrastructure_sharing": "none",
+            "strict_coverage": "none",
+            "subsidy_scenario": "none",
+            "speed_limit_policy": "none"
+        }),
+
+        ("Domestic equipment", {
+            "equipment_scenario": "domestic"
+        }),
+
+        ("Foreign equipment", {
+            "equipment_scenario": "foreign"
+        }),
+
+        ("Dishonest operators", {
+            "dishonest_operators": "dishonest_operators"
+        }),
+
+        ("Infrastructure sharing", {
+            "infrastructure_sharing": "infrastructure_sharing"
+        }),
+
+        ("Strict regulation", {
+            "strict_coverage": "strict_coverage"
+        }),
+
+        ("Single subsidy", {
+            "subsidy_scenario": "single"
+        }),
+
+        ("Multiple subsidies", {
+            "subsidy_scenario": "multiple"
+        }),
+
+        ("Speed restrictions", {
+            "speed_limit_policy": "speed_limit_policy"
+        })
+    ]
+
+    all_data = []
+
+    for scenario_name, params in scenarios:
+        df = run_scenario(
+            name=scenario_name,
+            monte_carlo_runs=30,
+            visualize=False,
+            **params
+        )
+        all_data.append(df)
+
+    final_df = pd.concat(all_data, ignore_index=True)
+    final_year = final_df["Год"].max()
+
+    summary = final_df.groupby(["Сценарий", "Год"]).mean(numeric_only=True)
+
+    print("\n===== ДИНАМИКА ПО ГОДАМ =====")
+    print(summary)
+
+    scenario_means = final_df.groupby("Сценарий").mean(numeric_only=True)
+
+    print("\n===== СРЕДНИЕ ЗНАЧЕНИЯ ПО СЦЕНАРИЯМ =====")
+
+    for scenario in scenario_means.index:
+      print(f"\n==============================")
+      print(f"Сценарий: {scenario}")
+      print(f"==============================")
+      row = scenario_means.loc[scenario]
+      print(f"HHI: {row['HHI']:.2f}")
+      print(f"ARPU 5G: {row['ARPU 5G']:.2f}")
+      print(f"Цена 5G: {row['Цена 5G']:.2f}")
+      print(f"Покрытие 5G: {row['Покрытие 5G']:.6f}")
+      print(f"Годовая выручка 5G: {row['Годовая выручка 5G']:.2f}")
+      print(f"Годовые издержки 5G: {row['Годовые издержки 5G']:.2f}")
+      print(f"Годовая прибыль 5G: {row['Годовая прибыль 5G']:.2f}")
+      print(f"Годовые CAPEX 5G: {row['Годовые CAPEX 5G']:.2f}")
+      print(f"Штрафы: {row['Штрафы']:.2f}")
+      print(f"Годовые продажи тарифов 5G: {row['Годовые продажи тарифов 5G']:.2f}")
+
+    final_df.to_csv(
+        "simulation_results.csv",
+        index=False
+    )
+    # ГРАФИКИ ДИНАМИКИ
+    metrics = [
+        "HHI",
+        "ARPU 5G",
+        "Цена 5G",
+        "Годовые продажи тарифов 5G",
+        "Покрытие 5G",
+        "Годовая выручка 5G",
+        "Годовые издержки 5G",
+        "Годовая прибыль 5G",
+        "Годовые CAPEX 5G"
+    ]
+    for metric in metrics:
+        plt.figure(figsize=(10, 5))
+        for scenario_name, _ in scenarios:
+            subset = final_df[final_df["Сценарий"] == scenario_name]
+            grouped = subset.groupby("Год")[metric]
+            mean = grouped.mean()
+            std = grouped.std()
+            years = mean.index
+            plt.plot(years, mean, label=scenario_name, linewidth=2)
+            plt.fill_between(years, mean - std, mean + std, alpha=0.03)
+        plt.title(metric)
+        plt.xlabel("Год")
+        plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
+        plt.ylabel(metric)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+    final_year = final_df["Год"].max()
+    # Средние за последний год
+    final_summary = (
+    final_df[final_df["Год"] == final_year]
+    .groupby("Сценарий")
+    .mean(numeric_only=True)
+)
+    print("\n===== СРЕДНИЕ ЗА ПОСЛЕДНИЙ ГОД =====")
+    print(final_summary)
+    final_period = final_df[
+        final_df["Год"] == final_year
+    ]
+    for metric in metrics:
+        plt.figure(figsize=(10, 5))
+        data = []
+        labels = []
+        for scenario_name, _ in scenarios:
+            values = final_period[
+                final_period["Сценарий"] == scenario_name
+            ][metric]
+            data.append(values)
+            labels.append(scenario_name)
+        plt.boxplot(data, labels=labels)
+        plt.title(f"{metric} — финальный год")
+        plt.xticks(rotation=45)
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+    return final_df
+
+if __name__ == "__main__":
+
+    results = run_experiments()
